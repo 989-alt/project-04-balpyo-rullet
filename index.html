@@ -1,0 +1,1049 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>발표 차례 룰렛 · 이름 뽑기</title>
+<meta name="description" content="학급 명단을 한 번만 등록해 두고, 발표·질문할 학생을 무작위·가중치로 추첨하는 교실용 단일 페이지 룰렛.">
+<style>
+  /* ── Raycast-inspired dark canvas ── */
+  :root {
+    --canvas:#07080a;
+    --surface:#0d0d0d;
+    --surface-elevated:#101111;
+    --surface-card:#121212;
+    --ink:#f4f4f6;
+    --body:#cdcdcd;
+    --mute:#9c9c9d;
+    --ash:#6a6b6c;
+    --hairline:#242728;
+    --hairline-soft:rgba(255,255,255,0.08);
+    --hairline-strong:rgba(255,255,255,0.16);
+    --accent-yellow:#ffc533;
+    --accent-yellow-soft:rgba(255,197,51,0.15);
+    --accent-red:#ff6161;
+    --accent-green:#59d499;
+    --accent-blue:#57c1ff;
+    --focus-ring:rgba(87,193,255,0.6);
+    --radius-sm:6px;
+    --radius-md:8px;
+    --radius-lg:10px;
+    --radius-xl:16px;
+    color-scheme: dark;
+  }
+
+  *,*::before,*::after { box-sizing:border-box; }
+  html,body { margin:0; padding:0; }
+  body {
+    background: var(--canvas);
+    color: var(--body);
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    font-feature-settings:"calt","kern","liga","ss03";
+    font-size:16px;
+    line-height:1.6;
+    min-height:100vh;
+  }
+
+  button, input, textarea, select {
+    font:inherit;
+    color:inherit;
+  }
+  button { cursor:pointer; background:none; border:0; }
+  button[disabled], button[aria-disabled="true"] {
+    cursor:not-allowed;
+    color: var(--ash);
+  }
+
+  :focus-visible {
+    outline:2px solid var(--focus-ring);
+    outline-offset:2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* ── Layout ── */
+  .app {
+    max-width:1600px;
+    margin: 0 auto;
+    padding: 24px;
+    display:flex;
+    flex-direction:column;
+    gap: 24px;
+    min-height:100vh;
+  }
+  header.top {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding-bottom:16px;
+    border-bottom:1px solid var(--hairline);
+  }
+  .brand {
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .brand .dot {
+    width:14px;height:14px;
+    border-radius:50%;
+    background: var(--accent-yellow);
+    box-shadow: 0 0 12px var(--accent-yellow-soft);
+  }
+  .brand h1 {
+    margin:0;
+    font-size:22px;
+    font-weight:500;
+    color: var(--ink);
+    letter-spacing:0.2px;
+  }
+  .brand .sub {
+    color: var(--mute);
+    font-size:13px;
+    letter-spacing:0.2px;
+  }
+  .keys {
+    display:flex; gap:8px; align-items:center;
+    color: var(--mute);
+    font-size:13px;
+  }
+  .keycap {
+    background: var(--surface-card);
+    border:1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    padding: 2px 8px;
+    color: var(--body);
+    font-size:12px;
+    line-height:1.4;
+  }
+
+  main {
+    display:grid;
+    grid-template-columns: 320px 1fr 320px;
+    gap:24px;
+    flex:1;
+  }
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--surface);
+    border:1px solid var(--hairline);
+    border-radius: var(--radius-xl);
+    padding:24px;
+    display:flex; flex-direction:column;
+    gap:16px;
+  }
+  .panel h2 {
+    margin:0;
+    font-size:18px;
+    font-weight:500;
+    color: var(--ink);
+    letter-spacing:0.2px;
+  }
+  .panel .hint {
+    color: var(--mute);
+    font-size:13px;
+  }
+
+  /* ── Center stage ── */
+  .stage {
+    align-items:center;
+    justify-content:flex-start;
+    padding:32px;
+    gap:24px;
+  }
+  .modes {
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .mode-pill {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:6px 14px;
+    border-radius:9999px;
+    background: transparent;
+    color: var(--body);
+    border:1px solid transparent;
+    font-size:14px;
+    font-weight:500;
+    transition: background-color .2s ease, color .2s ease, border-color .2s ease;
+  }
+  .mode-pill:hover { background: var(--hairline-soft); }
+  .mode-pill input { position:absolute; opacity:0; pointer-events:none; }
+  .mode-pill.is-active {
+    background: var(--surface-elevated);
+    color: var(--ink);
+    border-color: var(--hairline);
+  }
+
+  .result-card {
+    width:100%;
+    min-height: 360px;
+    background: var(--surface-elevated);
+    border:1px solid var(--hairline);
+    border-radius: var(--radius-xl);
+    padding: 40px 32px;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    text-align:center;
+    transition: border-color .25s ease, background-color .25s ease;
+  }
+  .result-card.is-revealed {
+    border-color: var(--accent-yellow-soft);
+    background: var(--surface);
+  }
+  .result-card.is-empty {
+    color: var(--mute);
+  }
+  .result-caption {
+    color: var(--mute);
+    font-size:14px;
+    letter-spacing:0.3px;
+    text-transform:uppercase;
+    margin-bottom:8px;
+    min-height: 22px;
+  }
+  .result-name {
+    color: var(--ink);
+    font-size: clamp(56px, 11vw, 156px);
+    font-weight:600;
+    line-height:1.05;
+    letter-spacing:-0.5px;
+    word-break: keep-all;
+    transition: color .2s ease, opacity .15s ease;
+  }
+  .result-card.is-revealed .result-name { color: var(--accent-yellow); }
+  .result-name[data-state="empty"] {
+    color: var(--ash);
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight:500;
+    letter-spacing:0;
+  }
+  .result-num {
+    color: var(--mute);
+    font-size:18px;
+    margin-bottom:6px;
+    letter-spacing:0.3px;
+    min-height: 22px;
+  }
+  .result-stat {
+    color: var(--mute);
+    font-size:14px;
+    margin-top:16px;
+    min-height: 20px;
+  }
+
+  .spin-row {
+    display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:center;
+  }
+  .btn {
+    display:inline-flex; align-items:center; gap:8px;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    background: var(--surface-elevated);
+    color: var(--ink);
+    border:1px solid var(--hairline);
+    font-size:14px; font-weight:500;
+    transition: background-color .2s ease, color .2s ease, border-color .2s ease;
+  }
+  .btn:hover:not([disabled]) { border-color: var(--hairline-strong); }
+  .btn-primary {
+    background: #ffffff;
+    color: #18191a;
+    border-color: #ffffff;
+    font-weight:600;
+    padding: 14px 28px;
+    border-radius: 9999px;
+    font-size:16px;
+    /* keep state-change colors snappy so e2e screenshots aren't mid-transition */
+    transition: background-color 60ms ease, color 60ms ease, border-color 60ms ease;
+  }
+  .btn-primary:hover:not([disabled]) { background: #e8e8e8; border-color: #e8e8e8; }
+  .btn-primary[disabled] {
+    background: var(--surface-elevated);
+    color: var(--ash);
+    border-color: var(--hairline);
+  }
+  .btn-danger {
+    color: var(--accent-red);
+    border-color: var(--hairline);
+  }
+  .btn-danger:hover:not([disabled]) { border-color: var(--accent-red); }
+  .btn-ghost {
+    background:transparent;
+    color: var(--body);
+  }
+
+  .recent {
+    display:flex; gap:6px; flex-wrap:wrap;
+    justify-content:center;
+    min-height: 28px;
+  }
+  .recent .chip {
+    background: var(--surface-card);
+    color: var(--body);
+    border:1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    padding: 4px 10px;
+    font-size:13px;
+  }
+  .recent .chip.is-latest {
+    border-color: var(--accent-yellow-soft);
+    color: var(--accent-yellow);
+  }
+  .recent .empty { color: var(--ash); font-size:13px; }
+
+  /* ── Roster panel ── */
+  textarea.roster {
+    width:100%;
+    min-height: 200px;
+    resize:vertical;
+    background: var(--surface-elevated);
+    color: var(--ink);
+    border:1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    font-size:15px;
+    line-height:1.6;
+    font-family: 'Inter', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  }
+  textarea.roster:focus { border-color: var(--hairline-strong); }
+  .count-chip {
+    display:inline-flex; align-items:center; gap:6px;
+    background: var(--accent-yellow-soft);
+    color: var(--accent-yellow);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size:12px;
+    font-weight:500;
+  }
+  .row-controls { display:flex; gap:8px; flex-wrap:wrap; }
+
+  .data-menu { display:flex; flex-direction:column; gap:8px; }
+  .toggle-row {
+    display:flex; align-items:center; gap:8px; color: var(--body); font-size:14px;
+  }
+
+  /* ── Roster table ── */
+  .roster-list {
+    display:flex; flex-direction:column; gap:4px;
+    max-height: 560px;
+    overflow-y:auto;
+    padding-right:4px;
+  }
+  .roster-list::-webkit-scrollbar { width:8px; }
+  .roster-list::-webkit-scrollbar-thumb { background: var(--hairline); border-radius:4px; }
+  .roster-row {
+    display:grid;
+    grid-template-columns: 16px 1fr auto;
+    gap:10px; align-items:center;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border:1px solid transparent;
+  }
+  .roster-row.is-zero-today { border-color: var(--hairline-soft); }
+  .roster-row .name {
+    color: var(--ink);
+    font-size:15px;
+    font-weight:500;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .roster-row .num {
+    color: var(--mute);
+    font-size:12px;
+    margin-right:4px;
+  }
+  .roster-row .counts {
+    display:flex; align-items:center; gap:8px;
+    color: var(--mute); font-size:13px;
+  }
+  .roster-row .bar {
+    width:48px; height:6px;
+    background: var(--surface-card);
+    border:1px solid var(--hairline-soft);
+    border-radius:3px;
+    overflow:hidden;
+  }
+  .roster-row .bar > span {
+    display:block; height:100%;
+    background: var(--accent-blue);
+  }
+  .roster-row .zero-dot {
+    width:8px; height:8px;
+    border-radius:50%;
+    background: var(--accent-yellow);
+    box-shadow: 0 0 6px var(--accent-yellow-soft);
+  }
+  .roster-row.is-just-picked {
+    background: var(--accent-yellow-soft);
+  }
+  .empty-roster {
+    color: var(--mute); font-size:14px;
+    padding: 12px;
+    text-align:center;
+    border:1px dashed var(--hairline);
+    border-radius: var(--radius-md);
+  }
+
+  /* ── Toast ── */
+  .toast-stack {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    display:flex; flex-direction:column; gap:8px;
+    z-index: 50;
+  }
+  .toast {
+    background: var(--surface-elevated);
+    border:1px solid var(--hairline);
+    color: var(--ink);
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    font-size:14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    max-width: 320px;
+  }
+  .toast.is-warn { border-color: var(--accent-yellow-soft); }
+  .toast.is-error { border-color: var(--accent-red); color: var(--accent-red); }
+
+  /* ── Visually hidden ── */
+  .sr-only {
+    position:absolute;
+    width:1px; height:1px;
+    padding:0; margin:-1px; overflow:hidden;
+    clip:rect(0 0 0 0); white-space:nowrap; border:0;
+  }
+
+  /* ── Reduced motion ── */
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
+
+  /* ── Print ── */
+  @media print {
+    body { background: white; color: black; }
+    .stage, .left-panel, .toast-stack, header.top, .recent, .modes, .spin-row { display:none !important; }
+    main { display:block; }
+    .panel { background:white; color:black; border-color:#999; }
+    .roster-row .name { color:black; }
+    .roster-row .counts { color:#444; }
+    .roster-row .bar { display:none; }
+  }
+
+  /* small screens */
+  @media (max-width: 600px) {
+    .app { padding:16px; }
+    .panel { padding:16px; }
+    .result-card { min-height: 220px; padding:24px 16px; }
+    main { gap:16px; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <header class="top">
+    <div class="brand">
+      <span class="dot" aria-hidden="true"></span>
+      <div>
+        <h1>발표 차례 룰렛</h1>
+        <div class="sub">학급 명단에서 한 명을 공정하게 — 서버 전송 없음</div>
+      </div>
+    </div>
+    <div class="keys" aria-hidden="true">
+      <span>스핀</span>
+      <span class="keycap">Space</span>
+      <span>또는</span>
+      <span class="keycap">Enter</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- LEFT: 명단 입력 + 데이터 메뉴 -->
+    <section class="panel left-panel" aria-label="명단 입력">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+        <h2>명단</h2>
+        <span class="count-chip" id="countChip" aria-live="polite">0명</span>
+      </div>
+      <label for="rosterInput" class="hint">한 줄에 한 명. <code>1. 이수아</code> 처럼 번호를 붙여도 됩니다.</label>
+      <textarea class="roster" id="rosterInput" rows="10" aria-describedby="rosterHint" placeholder="예시)
+1. 김민지
+2. 박지호
+3. 이수아
+4. 정도원
+5. 한가람"></textarea>
+      <div id="rosterHint" class="hint">빈 줄·중복은 자동으로 무시됩니다.</div>
+      <div class="row-controls">
+        <button class="btn btn-primary" id="applyRoster" style="padding:8px 16px;font-size:14px;border-radius:8px;">명단 적용</button>
+        <button class="btn btn-ghost" id="loadDemo" type="button">샘플 24명</button>
+      </div>
+
+      <div style="height:1px;background:var(--hairline);margin:8px 0;" aria-hidden="true"></div>
+
+      <h2 style="font-size:14px;color:var(--mute);font-weight:500;letter-spacing:0.4px;text-transform:uppercase;">데이터</h2>
+      <div class="data-menu">
+        <button class="btn" id="exportBtn" type="button">JSON 내보내기</button>
+        <button class="btn" id="importBtn" type="button">JSON 가져오기</button>
+        <input type="file" id="fileInput" accept="application/json,.json" hidden>
+        <label class="toggle-row">
+          <input type="checkbox" id="soundToggle"> 스핀 효과음
+        </label>
+        <button class="btn btn-danger" id="resetAll" type="button">전체 초기화</button>
+      </div>
+    </section>
+
+    <!-- CENTER: 모드 + 결과 + 스핀 -->
+    <section class="panel stage" aria-label="추첨 무대">
+      <div class="modes" role="radiogroup" aria-label="추첨 모드">
+        <label class="mode-pill is-active">
+          <input type="radio" name="mode" value="random" checked>
+          무작위
+        </label>
+        <label class="mode-pill">
+          <input type="radio" name="mode" value="exclude-last">
+          방금 사람 제외
+        </label>
+        <label class="mode-pill">
+          <input type="radio" name="mode" value="today-only">
+          오늘 안 한 사람만
+        </label>
+      </div>
+
+      <div class="result-card is-empty" id="resultCard" aria-live="polite">
+        <div class="result-num" id="resultNum"></div>
+        <div class="result-caption" id="resultCaption">스핀 버튼을 눌러보세요</div>
+        <div class="result-name" id="resultName" data-state="empty">준비됨</div>
+        <div class="result-stat" id="resultStat"></div>
+      </div>
+
+      <div class="spin-row">
+        <button class="btn-primary btn" id="spinBtn" type="button" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          스핀
+        </button>
+      </div>
+
+      <div class="recent" id="recentRow" aria-label="최근 호명">
+        <span class="empty">아직 호명 없음</span>
+      </div>
+    </section>
+
+    <!-- RIGHT: 카운트 표 -->
+    <section class="panel" aria-label="호명 카운트">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+        <h2>호명 카운트</h2>
+        <span class="hint">적은 순 정렬</span>
+      </div>
+      <div class="roster-list" id="rosterList" aria-live="polite">
+        <div class="empty-roster">왼쪽에 명단을 입력하세요</div>
+      </div>
+      <div class="row-controls" style="margin-top:8px;">
+        <button class="btn" id="resetToday" type="button">오늘 초기화</button>
+        <button class="btn btn-danger" id="resetTotals" type="button">전체 카운트 초기화</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toastStack" class="toast-stack" aria-live="assertive" aria-atomic="true"></div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ── State ─────────────────────────────────────────────────────────────
+  const STORAGE_KEY = 'balpyo-rullet-v1';
+  /**
+   * state = {
+   *   students: [{ id, num, name, today, total }],
+   *   lastPickedId: string | null,
+   *   recent: string[],          // names, latest first
+   *   mode: 'random' | 'exclude-last' | 'today-only',
+   *   soundOn: boolean,
+   * }
+   */
+  const defaultState = () => ({
+    students: [],
+    lastPickedId: null,
+    recent: [],
+    mode: 'random',
+    soundOn: false,
+  });
+
+  let state = loadState();
+  let isSpinning = false;
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return defaultState();
+      const parsed = JSON.parse(raw);
+      const base = defaultState();
+      return {
+        students: Array.isArray(parsed.students) ? parsed.students.map(sanitizeStudent).filter(Boolean) : base.students,
+        lastPickedId: parsed.lastPickedId ?? null,
+        recent: Array.isArray(parsed.recent) ? parsed.recent.slice(0, 5) : [],
+        mode: ['random','exclude-last','today-only'].includes(parsed.mode) ? parsed.mode : base.mode,
+        soundOn: !!parsed.soundOn,
+      };
+    } catch (e) {
+      console.warn('state load failed', e);
+      return defaultState();
+    }
+  }
+  function sanitizeStudent(s) {
+    if (!s || typeof s !== 'object') return null;
+    const id = typeof s.id === 'string' && s.id ? s.id : crypto.randomUUID();
+    const name = typeof s.name === 'string' ? s.name.trim() : '';
+    if (!name) return null;
+    const num = Number.isInteger(s.num) ? s.num : 0;
+    const today = Number.isInteger(s.today) && s.today >= 0 ? s.today : 0;
+    const total = Number.isInteger(s.total) && s.total >= 0 ? s.total : 0;
+    return { id, num, name, today, total };
+  }
+  function persist() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch (e) { showToast('저장에 실패했습니다', 'error'); }
+  }
+
+  // ── DOM refs ──────────────────────────────────────────────────────────
+  const $ = (sel) => document.querySelector(sel);
+  const rosterInput = $('#rosterInput');
+  const countChip = $('#countChip');
+  const applyBtn = $('#applyRoster');
+  const demoBtn = $('#loadDemo');
+  const exportBtn = $('#exportBtn');
+  const importBtn = $('#importBtn');
+  const fileInput = $('#fileInput');
+  const soundToggle = $('#soundToggle');
+  const resetAll = $('#resetAll');
+  const spinBtn = $('#spinBtn');
+  const resultCard = $('#resultCard');
+  const resultName = $('#resultName');
+  const resultCaption = $('#resultCaption');
+  const resultNum = $('#resultNum');
+  const resultStat = $('#resultStat');
+  const recentRow = $('#recentRow');
+  const rosterList = $('#rosterList');
+  const resetToday = $('#resetToday');
+  const resetTotals = $('#resetTotals');
+  const toastStack = $('#toastStack');
+  const modeInputs = document.querySelectorAll('input[name="mode"]');
+
+  // ── Toasts ────────────────────────────────────────────────────────────
+  function showToast(msg, kind /* 'info'|'warn'|'error' */) {
+    const el = document.createElement('div');
+    el.className = 'toast' + (kind === 'warn' ? ' is-warn' : kind === 'error' ? ' is-error' : '');
+    el.textContent = msg;
+    toastStack.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s ease'; }, 2600);
+    setTimeout(() => el.remove(), 3000);
+  }
+
+  // ── Roster parsing ────────────────────────────────────────────────────
+  // Accept "1. 이수아", "1 이수아", "1) 이수아", "이수아", "이수아 (3-2)"
+  function parseRoster(text) {
+    const lines = text.split(/\r?\n/);
+    const seen = new Set();
+    const out = [];
+    let autoNum = 1;
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;
+      // Strip leading number + separator
+      const m = line.match(/^(\d{1,3})\s*[.\)\:\-]?\s*(.+)$/);
+      let num, name;
+      if (m) { num = parseInt(m[1], 10); name = m[2].trim(); }
+      else { num = autoNum; name = line; }
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ num, name });
+      autoNum = Math.max(autoNum, num) + 1;
+    }
+    return out;
+  }
+
+  function applyRosterText(text) {
+    const parsed = parseRoster(text);
+    if (parsed.length === 0) {
+      showToast('명단이 비어 있습니다', 'warn');
+      return;
+    }
+    // Merge: keep counts for matching names, reset structure
+    const prev = new Map(state.students.map(s => [s.name.toLowerCase(), s]));
+    const next = parsed.map(({num, name}) => {
+      const old = prev.get(name.toLowerCase());
+      return old
+        ? { id: old.id, num, name, today: old.today, total: old.total }
+        : { id: crypto.randomUUID(), num, name, today: 0, total: 0 };
+    });
+    state.students = next;
+    // If last picked no longer exists, clear
+    if (!next.some(s => s.id === state.lastPickedId)) state.lastPickedId = null;
+    state.recent = state.recent.filter(name => next.some(s => s.name === name)).slice(0, 5);
+    persist();
+    renderAll();
+    showToast(`${next.length}명 적용 완료`);
+  }
+
+  // ── Mode ──────────────────────────────────────────────────────────────
+  function getEligible() {
+    const all = state.students;
+    if (all.length === 0) return [];
+    if (state.mode === 'random') return all;
+    if (state.mode === 'exclude-last') {
+      if (all.length === 1) return all;
+      return state.lastPickedId
+        ? all.filter(s => s.id !== state.lastPickedId)
+        : all;
+    }
+    if (state.mode === 'today-only') {
+      const zeros = all.filter(s => s.today === 0);
+      return zeros.length ? zeros : []; // empty means "everyone done"
+    }
+    return all;
+  }
+
+  // ── Spin ──────────────────────────────────────────────────────────────
+  function pickRandom(arr) {
+    // Use crypto for unbiased fairness
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return arr[buf[0] % arr.length];
+  }
+
+  function reducedMotion() {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  // Lazy WebAudio
+  let audioCtx = null;
+  function tick() {
+    if (!state.soundOn) return;
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const t = audioCtx.currentTime;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'square';
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.06, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t);
+      o.stop(t + 0.05);
+    } catch (e) {}
+  }
+  function fanfare() {
+    if (!state.soundOn) return;
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const t = audioCtx.currentTime;
+      [523.25, 659.25, 783.99].forEach((freq, i) => {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sine';
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, t + i * 0.08);
+        g.gain.exponentialRampToValueAtTime(0.10, t + i * 0.08 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.08 + 0.25);
+        o.connect(g).connect(audioCtx.destination);
+        o.start(t + i * 0.08);
+        o.stop(t + i * 0.08 + 0.3);
+      });
+    } catch (e) {}
+  }
+
+  async function spin() {
+    if (isSpinning) return;
+    if (state.students.length === 0) {
+      showToast('먼저 명단을 입력하세요', 'warn');
+      return;
+    }
+    let pool = getEligible();
+    let autoReset = false;
+    if (pool.length === 0) {
+      // today-only mode and everyone done — auto reset today
+      if (state.mode === 'today-only') {
+        state.students = state.students.map(s => ({ ...s, today: 0 }));
+        pool = state.students;
+        autoReset = true;
+      } else {
+        showToast('뽑을 수 있는 학생이 없습니다', 'warn');
+        return;
+      }
+    }
+
+    isSpinning = true;
+    spinBtn.setAttribute('aria-disabled','true');
+    spinBtn.disabled = true;
+    resultCard.classList.remove('is-revealed');
+
+    const finalPick = pickRandom(pool);
+    const useAnimation = !reducedMotion();
+    const duration = useAnimation ? 1000 : 100;
+
+    resultNum.textContent = '';
+    resultCaption.textContent = '추첨 중…';
+    resultStat.textContent = '';
+
+    if (useAnimation) {
+      const start = performance.now();
+      // ease-out: faster at start, slower at end
+      let last = 0;
+      const step = (now) => {
+        const elapsed = now - start;
+        const t = Math.min(1, elapsed / duration);
+        const ease = 1 - Math.pow(1 - t, 3);
+        // Interval grows from 35ms → 160ms
+        const interval = 35 + ease * 125;
+        if (now - last >= interval) {
+          const candidate = state.students[Math.floor(Math.random() * state.students.length)];
+          resultName.textContent = candidate.name;
+          tick();
+          last = now;
+        }
+        if (t < 1) {
+          requestAnimationFrame(step);
+        } else {
+          revealWinner(finalPick, autoReset);
+        }
+      };
+      requestAnimationFrame(step);
+    } else {
+      setTimeout(() => revealWinner(finalPick, autoReset), duration);
+    }
+  }
+
+  function revealWinner(student, autoReset) {
+    student.today += 1;
+    student.total += 1;
+    state.lastPickedId = student.id;
+    state.recent = [student.name, ...state.recent.filter(n => n !== student.name)].slice(0, 5);
+    persist();
+
+    resultCard.classList.add('is-revealed');
+    resultName.textContent = student.name;
+    resultName.setAttribute('data-state','revealed');
+    resultCaption.textContent = '오늘의 발표자';
+    resultNum.textContent = student.num ? `#${student.num}` : '';
+    resultStat.textContent = `오늘 ${student.today}회 · 전체 ${student.total}회`;
+    fanfare();
+
+    renderRoster(student.id);
+    renderRecent();
+    isSpinning = false;
+    spinBtn.disabled = state.students.length === 0;
+    spinBtn.removeAttribute('aria-disabled');
+
+    if (autoReset) {
+      showToast('모두 1회 이상 발표했습니다 — 오늘 카운트를 자동 초기화합니다');
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────
+  function renderAll() {
+    countChip.textContent = `${state.students.length}명`;
+    spinBtn.disabled = state.students.length === 0;
+    if (state.students.length === 0) spinBtn.setAttribute('aria-disabled','true');
+    else spinBtn.removeAttribute('aria-disabled');
+    renderRoster();
+    renderRecent();
+    renderModes();
+    soundToggle.checked = !!state.soundOn;
+    // Reset stage if no students OR no current winner to show
+    if (state.students.length === 0 || !state.lastPickedId) {
+      resultCard.classList.remove('is-revealed');
+      resultName.textContent = '준비됨';
+      resultName.setAttribute('data-state','empty');
+      resultCaption.textContent = state.students.length === 0
+        ? '명단을 먼저 입력하세요'
+        : '스핀 버튼을 눌러보세요';
+      resultNum.textContent = '';
+      resultStat.textContent = '';
+    }
+  }
+  function renderRoster(justPickedId) {
+    if (state.students.length === 0) {
+      rosterList.innerHTML = '<div class="empty-roster">왼쪽에 명단을 입력하세요</div>';
+      return;
+    }
+    const sorted = [...state.students].sort((a, b) => {
+      if (a.today !== b.today) return a.today - b.today;
+      if (a.total !== b.total) return a.total - b.total;
+      return a.num - b.num;
+    });
+    const maxToday = Math.max(1, ...sorted.map(s => s.today));
+    rosterList.innerHTML = '';
+    for (const s of sorted) {
+      const row = document.createElement('div');
+      row.className = 'roster-row';
+      if (s.today === 0) row.classList.add('is-zero-today');
+      if (s.id === justPickedId) row.classList.add('is-just-picked');
+      const dot = s.today === 0 ? '<span class="zero-dot" aria-hidden="true"></span>' : '<span></span>';
+      const barWidth = Math.round((s.today / maxToday) * 100);
+      row.innerHTML = `
+        ${dot}
+        <div class="name"><span class="num">#${s.num}</span>${escapeHtml(s.name)}</div>
+        <div class="counts" aria-label="오늘 ${s.today}회, 전체 ${s.total}회">
+          <span>${s.today} / ${s.total}</span>
+          <div class="bar" aria-hidden="true"><span style="width:${barWidth}%"></span></div>
+        </div>`;
+      rosterList.appendChild(row);
+    }
+  }
+  function renderRecent() {
+    if (!state.recent.length) {
+      recentRow.innerHTML = '<span class="empty">아직 호명 없음</span>';
+      return;
+    }
+    recentRow.innerHTML = state.recent.map((name, i) => {
+      const cls = 'chip' + (i === 0 ? ' is-latest' : '');
+      return `<span class="${cls}">${escapeHtml(name)}</span>`;
+    }).join('');
+  }
+  function renderModes() {
+    modeInputs.forEach(inp => {
+      const label = inp.closest('.mode-pill');
+      const on = inp.value === state.mode;
+      inp.checked = on;
+      if (label) label.classList.toggle('is-active', on);
+    });
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  // ── JSON I/O ──────────────────────────────────────────────────────────
+  function exportJson() {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      students: state.students,
+      recent: state.recent,
+      mode: state.mode,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,10);
+    a.href = url; a.download = `balpyo-rullet-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('JSON 파일을 내보냈습니다');
+  }
+  async function importJson(file) {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!parsed || !Array.isArray(parsed.students)) throw new Error('형식 오류');
+      const students = parsed.students.map(sanitizeStudent).filter(Boolean);
+      if (students.length === 0) throw new Error('학생 정보 없음');
+      if (!confirm(`${students.length}명을 가져옵니다. 현재 상태를 덮어쓸까요?`)) return;
+      state.students = students;
+      state.recent = Array.isArray(parsed.recent) ? parsed.recent.slice(0,5) : [];
+      state.mode = ['random','exclude-last','today-only'].includes(parsed.mode) ? parsed.mode : 'random';
+      state.lastPickedId = null;
+      persist();
+      // sync textarea
+      rosterInput.value = students.map(s => `${s.num}. ${s.name}`).join('\n');
+      renderAll();
+      showToast(`${students.length}명을 가져왔습니다`);
+    } catch (e) {
+      showToast('가져오기 실패: ' + e.message, 'error');
+    }
+  }
+
+  // ── Event wiring ──────────────────────────────────────────────────────
+  applyBtn.addEventListener('click', () => applyRosterText(rosterInput.value));
+  rosterInput.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      applyRosterText(rosterInput.value);
+    }
+  });
+  demoBtn.addEventListener('click', () => {
+    const names = ['김민지','박지호','이수아','정도원','한가람','오서윤','윤재희','문하준','강하린','조시우','신예준','임지안','권나래','배도윤','홍은우','서지유','전유나','노현서','구도연','진아윤','류건우','문서영','백시현','황주원'];
+    rosterInput.value = names.map((n, i) => `${i+1}. ${n}`).join('\n');
+    applyRosterText(rosterInput.value);
+  });
+  spinBtn.addEventListener('click', spin);
+  document.addEventListener('keydown', (e) => {
+    // Avoid trigger while typing in textarea or inputs
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'TEXTAREA' || tag === 'INPUT' || e.target.isContentEditable) return;
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      spin();
+    }
+  });
+  modeInputs.forEach(inp => inp.addEventListener('change', () => {
+    state.mode = inp.value;
+    persist();
+    renderModes();
+  }));
+  exportBtn.addEventListener('click', exportJson);
+  importBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (f) importJson(f);
+    fileInput.value = '';
+  });
+  soundToggle.addEventListener('change', () => {
+    state.soundOn = soundToggle.checked;
+    persist();
+    if (state.soundOn) {
+      // Unlock audio context with a soft tick (user gesture)
+      try { tick(); } catch (e) {}
+    }
+  });
+  resetToday.addEventListener('click', () => {
+    if (!state.students.length) return;
+    if (!confirm('오늘 카운트를 모두 0으로 되돌릴까요?')) return;
+    state.students = state.students.map(s => ({ ...s, today: 0 }));
+    persist(); renderAll();
+    showToast('오늘 카운트를 초기화했습니다');
+  });
+  resetTotals.addEventListener('click', () => {
+    if (!state.students.length) return;
+    if (!confirm('전체 카운트를 모두 0으로 되돌릴까요? (명단은 유지)')) return;
+    state.students = state.students.map(s => ({ ...s, today: 0, total: 0 }));
+    state.lastPickedId = null;
+    state.recent = [];
+    persist(); renderAll();
+    showToast('전체 카운트를 초기화했습니다');
+  });
+  resetAll.addEventListener('click', () => {
+    if (!confirm('명단·카운트·이력 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
+    state = defaultState();
+    persist();
+    rosterInput.value = '';
+    renderAll();
+    showToast('전체 초기화 완료');
+  });
+
+  // ── Bootstrap ─────────────────────────────────────────────────────────
+  if (state.students.length) {
+    rosterInput.value = state.students.map(s => `${s.num}. ${s.name}`).join('\n');
+  }
+  renderAll();
+  // Expose minimal API for e2e tests
+  window.__app = {
+    getState: () => JSON.parse(JSON.stringify(state)),
+    spin,
+    parseRoster,
+  };
+})();
+</script>
+</body>
+</html>

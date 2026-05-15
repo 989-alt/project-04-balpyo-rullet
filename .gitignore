@@ -1,0 +1,12 @@
+.env
+.env.local
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+.cache/
+.wrangler/
+.vite/
+tests/screenshots/
